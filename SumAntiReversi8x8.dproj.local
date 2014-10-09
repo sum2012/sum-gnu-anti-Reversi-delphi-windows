@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2012/01/28 16:46:45.888.pas,E:\delphi\Anti Reversi\0.6c\aiThread.pas=</Transaction>
+    <Transaction>2012/01/29 07:12:52.477.dproj,E:\delphi\Anti Reversi\0.6c\Project1.dproj=E:\delphi\Anti Reversi\0.6c\SumAntiReversi8x8.dproj</Transaction>
+    <Transaction>2012/01/29 07:12:52.515.txapackage,e:\delphi\anti reversi\0.6c\modelsupport_project1\default.txapackage=</Transaction>
+    <Transaction>2012/01/29 07:12:52.528.txapackage,e:\delphi\anti reversi\0.6c\modelsupport_project1\unit1\default.txapackage=</Transaction>
+    <Transaction>2012/01/29 07:12:52.535.txapackage,e:\delphi\anti reversi\0.6c\modelsupport_project1\project1\default.txapackage=</Transaction>
+    <Transaction>2012/01/29 07:12:52.541.txvpck,e:\delphi\anti reversi\0.6c\modelsupport_project1\project1\default.txvpck=</Transaction>
+  </Transactions>
+</BorlandProject>
