@@ -1,5 +1,5 @@
-Sum anti-Reversi-delphi-windows
-===========================
+Sum GNU anti-Reversi-delphi-windows
+===================================
 
 My old source of anti-Reversi
 Latest compiled version in https://sourceforge.net/projects/antireversi8x8/files/Delphi_v0.6c3_Eng/
@@ -10,7 +10,7 @@ Sum GNU anti-Reversi-lazarus-windows:https://github.com/sum2012/sum-gnu-anti-Rev
 muti thread version of windows.
 
 
-Sum anti-Reversi-delphi-Android
+Sum GNU anti-Reversi-delphi-Android
 Android version of this project: https://github.com/sum2012/sum-gnu-anti-Reversi-delphi-Android
 
 
