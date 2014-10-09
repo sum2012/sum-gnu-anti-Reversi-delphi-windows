@@ -6,7 +6,7 @@ Latest compiled version in https://sourceforge.net/projects/antireversi8x8/files
 
 Some project is based to this.
 
-anti-Reversi-lazarus-windows:https://github.com/sum2012/sum-gnu-anti-Reversi-lazarus-windows/blob/master/README.md
+anti-Reversi-lazarus-windows:https://github.com/sum2012/sum-gnu-anti-Reversi-lazarus-windows
 muti thread version of windows.
 
 
