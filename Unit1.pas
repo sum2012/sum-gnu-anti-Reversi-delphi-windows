@@ -21,39 +21,33 @@ unit Unit1;
 interface
 
 uses
-  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, jpeg, ExtCtrls, StdCtrls, Menus,ComCtrls;
+  SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, ExtCtrls, StdCtrls, Menus,ComCtrls,ClipBrd,System.SyncObjs;
 
 const
   inf = 10000;
 
-{
-  pos_mark[100] ={ 0,0,0,0,0,0,0,0,0,0,
-     0,255,-8,2,2,2,2,-8,255,0,
-      0,-8,-90, 1, 1, 1, 1,-90,-8,0,
-       0,2,  1, 1, 1, 1, 1,  1, 2,0,
-       0,2,  1, 1, 1, 1, 1,  1, 2,0,
-       0,2,  1, 1, 1, 1, 1,  1, 2,0,
-       0,2,  1, 1, 1, 1, 1,  1, 2,0,
-      0,-8,-90, 1, 1, 1, 1,-90,-8,0,
-      0,255,-8,2,2,2,2,-8,255,0,
-      0,0,0,0,0,0,0,0,0,0}
-//0 分是邊界 , 255 分是角
+
 
 
 type
   Tboard=array[0..9,0..9] of integer;
   Tmovelist = array[1..20] of integer;
-  TAppleResult = record
-         score:integer;
-          step:Tmovelist;
-  end;
+
 
 type
+
+  { TForm1 }
+
   TForm1 = class(TForm)
     apple: TImage;
     Chess2: TImage;
     Chess1: TImage;
+    HumanFirstButton: TMenuItem;
+    HumanVsHumanButton: TMenuItem;
+    ComputerFirstButton: TMenuItem;
+    AboutButton: TMenuItem;
+    RuleButton: TMenuItem;
     RedChess: TImage;
     BlackChess: TImage;
     Image1: TImage;
@@ -165,13 +159,16 @@ type
     Startposition6utton: TMenuItem;
     StopThinkButton: TMenuItem;
     Tojavaboardbutton: TMenuItem;
-    HumanFirstButton: TMenuItem;
-    CompuerFirstButton: TMenuItem;
-    HumanVsHumanButton: TMenuItem;
-    AboutButton: TMenuItem;
-    RuleButton: TMenuItem;
+    procedure AboutButtonClick(Sender: TObject);
+    procedure ComputerFirstButtonClick(Sender: TObject);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
+    procedure HumanFirstButtonClick(Sender: TObject);
+    procedure HumanVsHumanButtonClick(Sender: TObject);
+    procedure HumanvsHumanClick(Sender: TObject);
+    procedure MenuItem1Click(Sender: TObject);
+    procedure RuleButtonClick(Sender: TObject);
     procedure RedChessClick(Sender: TObject);
     procedure BlackChessClick(Sender: TObject);
     procedure ClosebuttonClick(Sender: TObject);
@@ -189,7 +186,6 @@ type
     procedure Deletechess(Sender: TObject);
     procedure ClearButtonClick(Sender: TObject);
     procedure BackButtonClick(Sender: TObject);
-    function Boardtostr(const aboard:Tboard):string;
     procedure Startposition2ButtonClick(Sender: TObject);
     procedure Startposition3ButtonClick(Sender: TObject);
     procedure Startposition4ButtonClick(Sender: TObject);
@@ -198,13 +194,17 @@ type
     procedure Startposition6uttonClick(Sender: TObject);
     procedure StopThinkButtonClick(Sender: TObject);
     procedure TojavaboardbuttonClick(Sender: TObject);
-    procedure HumanFirstButtonClick(Sender: TObject);
-    procedure CompuerFirstButtonClick(Sender: TObject);
-    procedure HumanVsHumanButtonClick(Sender: TObject);
-    procedure AboutButtonClick(Sender: TObject);
-    procedure RuleButtonClick(Sender: TObject);
   private
-      ThreadAFinished,ThreadBFinished: Boolean;
+//      mutistep:Boolean;
+//      mutiscore:Integer;
+      mutidepth:integer;
+      mutitemplist:Tstringlist;
+      mutisteplist:Tstringlist;
+      mutiscorelist:Tstringlist;
+//    mutiscore:array[0..20] of integer;
+      mutiSideisRed:Boolean;
+      mutiBoard:Tboard;
+      MyCriticalSection: TCriticalSection;
       StopThink:Boolean;
       initboard,board:Tboard;
       FirstIsRed:Boolean;
@@ -218,6 +218,8 @@ type
       Redlist,Blacklist:TStringList;
       AiMovelist:string;
       movedlist:TStringList;
+      function Muti(const ComputerisRed:Boolean):string;
+      procedure DoSomethingParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
       procedure MakeRedMove(const ABoard:Tboard;var temp:TStringList);
       procedure MakeBlackMove(const ABoard:Tboard;var temp:TStringList);
  //     function MakeRedMoveAI(const ABoard:Tboard):TStringList;
@@ -232,9 +234,11 @@ type
       function MinMaxRandom(Aboard:Tboard;SideIsRed:Boolean;depth:integer;var aithinkstep:string):integer;
       function EvaluateScore(const Aboard:Tboard;const SideIsRed:Boolean):Integer;
       function MinMaxStart(Aboard:Tboard;SideIsRed:Boolean;depth:integer;var aithinkstep:string):integer;
+      function MutiMinMaxStart(Aboard:Tboard;SideIsRed:Boolean;depth:integer;var aithinkstep:string):integer;
       Procedure Scoresort(var scorelist:Tstringlist;var stepno:Tstringlist);
       function ThinkNumber(Aboard:Tboard;SideIsRed:Boolean;depth:integer):integer;
       Function BoardtoFen:String;
+      function MutiMinMax(Aboard:Tboard;const SideIsRed:Boolean;const depth:integer;var aithinkstep:string):integer;
     { Private declarations }
   public
     { Public declarations }
@@ -313,32 +317,19 @@ var
  }
 implementation
 
+{$R *.lfm}
 
 
-{$R *.dfm}
-
-function Tform1.Boardtostr(const aboard:Tboard):string;
-var a,b:integer;
-begin
-  result:='';
-  for a:= 1 to 8 do
-  begin
-    for b:=1 to 8 do
-    begin
-      if board[b][a] = -1 then
-        result:=result+'0'
-      else if board[b][a] = 0 then
-        result:=result+'1'
-      else if board[b][a] = 1 then
-        result:=result+'2';
-    end;
-  end;
-end;
 
 procedure TForm1.FormCreate(Sender: TObject);
 var a,b:integer;
 begin
-  randomize;
+  mutitemplist := Tstringlist.Create;
+  mutisteplist := Tstringlist.Create;
+  mutiscorelist := Tstringlist.Create;
+
+  MyCriticalSection := TCriticalSection.Create;
+ randomize;
   StopThink:=False;
 //  RedMove:=True;
   for a:= 0 to 9 do
@@ -370,8 +361,551 @@ begin
   Label4.Caption:='0';
 
 end;
+function TForm1.Muti(const ComputerisRed:Boolean):String;
+function test(const depth:integer;const cuted:Boolean;const fullthink:boolean):string;
+var a,b,c,d,bestscore,cutnum:integer;templist,templist2:Tstringlist;OneDepthSideisRed:boolean;move,bestmove:string;//cut:Boolean;
+begin
+  mutitemplist.clear;
+  mutiscorelist.clear;
+// mutitemplist := Tstringlist.Create;
+////mutisteplist := Tstringlist.Create;
+//mutiscorelist := Tstringlist.Create;
+templist := Tstringlist.Create;
+templist2 := Tstringlist.Create;
+AiListBox.clear;
+if ComputerisRed = False then
+begin
+  OneDepthSideisRed:=False;
+  if mutisteplist.count <> 0 then
+  begin
+    templist.AddStrings(mutisteplist);
+    //:= mutisteplist;
+    mutisteplist.clear;
+  end
+  else
+  MakeBlackmove(board,templist);
+end
+else begin
+  OneDepthSideisRed:=True;
+  if mutisteplist.count <> 0 then
+  begin
+    templist.AddStrings(mutisteplist);
+//    templist := mutisteplist;
+    mutisteplist.clear;
+  end
+  else
+    MakeRedmove(board,templist);
+end;
+
+mutiSideisRed := OneDepthSideisRed;
+For a:= 0 to templist.Count-1 do
+begin
+  mutiscorelist.add('-2000');
+  mutisteplist.add('.');
+end;
+For a:= 0 to templist.Count-1 do
+begin
+
+   bestscore:= -inf;
+   mutiBoard := board;
+   if OneDepthSideisRed then
+   begin
+     Redboardupdate(mutiBoard,strtoint(templist[a]));
+     MakeBlackmove(mutiBoard,templist2);
+   end
+   else  begin
+     Blackboardupdate(mutiBoard,strtoint(templist[a]));
+     MakeRedmove(mutiBoard,templist2);
+   end;
+   for b:= 0 to templist2.count -1 do
+     mutitemplist.Add(inttostr(a)+' '+templist[a]+' '+templist2[b]);
+   if templist2.count = 0 then
+     mutitemplist.Add(inttostr(a)+' '+templist[a]+' p');
+end;
+mutidepth:= depth;
+ProcThreadPool.DoParallel(DoSomethingParallel,0,mutitemplist.count-1,nil);// address, startindex, endindex, optional data,max thread
+for a:= 0 to mutiscorelist.count-1 do
+   mutiscorelist[a] := inttostr(-strtoint(mutiscorelist[a]));
+scoresort(mutiscorelist,mutisteplist);
+If (cuted = false) or (fullthink = True) then
+begin
+ for a:= 0 to mutiscorelist.count-1 do
+  AiListBox.items.add(mutiscorelist[a]+':'+mutisteplist[a]);
+ b:= mutiscorelist.count-1;
+ for a:= b downto 1 do
+ begin
+   if strtoint(mutiscorelist[a]) <  strtoint(mutiscorelist[0]) then
+   begin
+     mutiscorelist.Delete(a);
+     mutisteplist.Delete(a);
+   end
+ end;
+ a:=Random(mutisteplist.Count);
+ Result:='image'+ inttostr(8*strtoint(copy(mutisteplist[a],3,1))+strtoint(copy(mutisteplist[a],1,1))-8);
+ ThinkstepEdit.text := AiListBox.items[a];
+ AIDisplayScoreLabel.Caption:= mutiscorelist[0];
+end
+else begin
+  b:= mutisteplist.count div 2 +1;
+  c:= mutisteplist.count -1;
+  for a:= b to c do
+    mutisteplist.Delete(mutisteplist.Count-1);
+  for a:= 0 to mutisteplist.count-1 do
+  begin
+    b:= strtoint(copy(mutisteplist[a],1,1));
+    c:= strtoint(copy(mutisteplist[a],3,1));
+    mutisteplist[a] := inttostr(8*c+b-8);
+  end;
+end;
+templist.free;
+templist2.free;
+mutitemplist.clear;
+mutiscorelist.clear;
+//mutitemplist.free;
+//mutiscorelist.free;
+end;
+var a,b,c,tempdepth:integer;
+begin
+//  mutisteplist := Tstringlist.Create;
+
+    if ComputerIsRed = true then
+  begin
+      MakeRedMove(board,redlist);
+     c:= redlist.Count;
+     redlist.clear;
+  end
+  else begin
+    MakeBlackMove(board,blacklist);
+    c:= blacklist.Count;
+    blacklist.clear;
+  end;
+  score(board,a,b);
+  tempdepth:= strToint(Endgamedepth.text);
+  if a+b + tempdepth > 64 then
+    tempdepth:= 64-a-b
+  else
+    tempdepth:= strToint(Nornaldepth.Text);
+
+  if (c > 4) and (a + b < 46)  then
+  begin
+  //nornally  tempdepth:= strtoint(NornalDepth.text)-2;
+    tempdepth:= tempdepth-4;
+    test(tempdepth,true,false);
+    // use mutisteplist to store cuted step
+    tempdepth:= tempdepth + 2;
+//    tempdepth:= strtoint(NornalDepth.text)-2;
+    Result:=test(tempdepth,false,false);
+  end
+  else begin
+    tempdepth := tempdepth - 2;
+//    tempdepth:= strtoint(NornalDepth.text)-2;
+    Result:=test(tempdepth,true,True);
+  end;
+  mutisteplist.clear;
+//  mutisteplist.free;
+end;
 
 
+
+procedure TForm1.AboutButtonClick(Sender: TObject);
+begin
+ ShowMessage('Copyright 2011,2012 by Wu Hon Sum'+#13+
+'This program is free software: you can redistribute it and/or modify'+#13+
+'it under the terms of the GNU General Public License as published by'+#13+
+'the Free Software Foundation, either version 3 of the License, or'+#13+
+'any later version.');
+end;
+
+procedure TForm1.ComputerFirstButtonClick(Sender: TObject);
+begin
+  HumanVsHumanButton.Click;
+  ComputerVsHuman.Click;
+end;
+
+procedure TForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+begin
+ mutitemplist.free;
+ mutisteplist.free;
+ mutiscorelist.free;
+  MyCriticalSection.Free;
+
+end;
+
+procedure TForm1.DoSomethingParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+var Aboard:Tboard;a,B,C,D,mutitscore:integer;stepno,tempstring,tempstring2,tempstring3,aithinkstep:string;SideisRed:Boolean;
+begin
+// system.EnterCriticalsection(MyCriticalSection);
+ tempstring := mutitemplist[index];
+// system.LeaveCriticalsection(MyCriticalSection);
+  For a := 2 to length(tempstring) do
+    if tempstring[a] = ' ' then break;
+  stepno := copy(tempstring,1,a-1);
+  tempstring :=  copy(tempstring,a+1,length(mutitemplist[index])-a);
+  For a := 2 to length(tempstring) do
+    if tempstring[a] = ' ' then break;
+  tempstring2 := copy(tempstring,1,a-1);
+  tempstring := copy(tempstring,a+1,2);
+  d:= strtoint(tempstring2);
+  b:= d div 8 +1 ;
+  c:= d mod 8;
+  if c = 0 then
+  begin
+    Dec(b);
+    c:=8;
+  end;
+  aithinkstep := inttostr(c)+','+inttostr(b);
+  Aboard:= board;
+  if tempstring[1] <> 'p' then
+  begin
+    d:= strtoint(tempstring);
+    b:= d div 8 +1 ;
+    c:= d mod 8;
+    if c = 0 then
+    begin
+      Dec(b);
+      c:=8;
+    end;
+    aithinkstep := aithinkstep+'->'+inttostr(c)+','+inttostr(b);
+    if mutisideisRed = True then
+    begin
+      RedboardUpdate(Aboard,strtoint(tempstring2));
+      Blackboardupdate(Aboard,strtoint(tempstring));
+    end
+    else begin
+      Blackboardupdate(Aboard,strtoint(tempstring2));
+      RedboardUpdate(Aboard,strtoint(tempstring));
+    end;
+    if  mutidepth > 5 then
+      mutitscore := -MutiMinMaxStart(Aboard,mutiSideIsRed,mutidepth,aithinkstep)
+    else
+      mutitscore := -MutiMinMax(Aboard,mutiSideIsRed,mutidepth,aithinkstep);
+  end
+  else begin
+     aithinkstep := aithinkstep + '->PASS';
+     if mutisideisRed = True then
+       RedboardUpdate(Aboard,strtoint(tempstring2))
+     Else
+       Blackboardupdate(Aboard,strtoint(tempstring2));
+     mutitscore := -MutiMinMax(Aboard,mutiSideIsRed,mutidepth+1,aithinkstep);
+  end;
+  a := strtoint(stepno);
+  MyCriticalSection.Acquire;
+  if mutitscore > strtoint(mutiscorelist[a]) then
+  begin
+    mutiscorelist[a] := inttostr(mutitscore);
+    mutisteplist[a] := aithinkstep;
+  end;
+  MyCriticalSection.Release;
+{
+ AAboard:=Aboard;
+  d:= strtoint(mutitemplist[index]);
+  b:= d div 8 +1 ;
+  c:= d mod 8;
+  if c = 0 then
+   begin
+  b:=b-1;
+  c:=8;
+  end;
+  oldaithinkstep := inttostr(c)+','+inttostr(b);
+  For a:= 0 to Templist.Count-1 do
+  begin
+    Aboard:=AAboard;
+    d:= strtoint(Templist[a]);
+    b:= d div 8 +1 ;
+    c:= d mod 8;
+    if c = 0 then
+    begin
+       b:=b-1;
+       c:=8;
+    end;
+    aithinkstep :=oldaithinkstep + '->'+ inttostr(c)+','+inttostr(b);
+    if mutisideisRed = True then
+      BlackboardUpdate(Aboard,strToint(Templist[a]))
+    else
+      RedboardUpdate(Aboard,strToint(Templist[a]));
+    mutitscore := -MutiMinMax(Aboard,mutiSideIsRed,mutidepth-2,aithinkstep);
+    if mutitscore > bestscore then
+    begin
+      bestscore := mutitscore;
+      bestaithinkstep := aithinkstep;
+    end;
+  end;
+  Templist.free;
+
+  system.EnterCriticalsection(MyCriticalSection);
+  mutiscorelist.Add(inttostr(-bestscore));
+  mutisteplist.Add(bestaithinkstep);
+  system.LeaveCriticalsection(MyCriticalSection);
+}
+end;
+
+function TForm1.MutiMinMaxStart(Aboard:Tboard;SideIsRed:Boolean;depth:integer;var aithinkstep:string):integer;
+var a,b,c,d,bestvalue, value:integer;templist:tstringlist;tempboard:Tboard;scorelist,steplist:Tstringlist;aithinksteplist:Tstringlist;oldaithinkstep:string;//bestaithinkstep:string;
+    //var a,b,c,bestvalue, value:integer;templist:tstringlist;tempboard:Tboard;sameboard:boolean;
+    begin
+    //一般來說，這裡有一個判斷棋局是否結束的函數，
+    //一旦棋局結束就不必繼續搜索了，直接返回極值。
+    //但由於黑白棋不存在中途結束的情況，故省略。
+
+      Score(Aboard,a,b);
+      if a = 0 then
+      begin
+        if SideIsRed then
+          result:= 2000
+        else
+          result:= -2000;
+        exit;
+      end;
+      if b = 0 then
+      begin
+        if SideIsRed then
+          result:= -2000
+        else
+          result:= 2000;
+        exit;
+      end;
+      if (depth<=0) or (a+b>63) then //葉子節點
+      begin
+        result:= EvaluateScore(Aboard,SideIsRed);//直接返回對局面的估值
+        exit;
+      end;
+    //  if SideIsRed then
+        bestvalue:=-INF;//初始最佳值設為負無窮
+    //  else
+    //    bestvalue:=INF;
+      //生成走法
+      templist:=tstringlist.Create;
+      if SideIsRed Then
+    //    templist:=MakeRedMoveAI(Aboard)
+        MakeRedMove(Aboard,templist)
+      else
+    //    templist:=MakeBlackMoveAI(Aboard);
+        MakeBlackMove(Aboard,templist);
+      if templist.Count = 0 then
+      begin
+        if SideIsRed Then
+          MakeBlackMove(Aboard,templist)
+        else
+          MakeRedMove(Aboard,templist);
+
+        if templist.Count = 0 then // both red and black no move
+        begin
+          templist.Free;
+    //      result:=0;
+          result:= EvaluateScore(Aboard,SideIsRed);//直接返回對局面的估值
+          exit;
+        end;
+    //    templist.Free;
+    //    if a + b > 63 then begin
+    //      result:= -EvaluateScore(Aboard,not SideIsRed);
+    //      exit;
+    //    end
+    //    else begin
+          result := -mutiMinMaxStart(Aboard,Not SideIsRed,depth,aithinkstep);//);//搜索子節點，注意前面的負號
+     //     result := -MinMaxSecond(Aboard,Not SideIsRed,depth);//);//搜索子節點，注意前面的負號
+    //      if a+ b < 40 then
+    //        result := result + 100;
+          templist.Free;
+          exit;
+      end;
+      tempboard:=Aboard;
+      scorelist := Tstringlist.Create;
+      steplist := Tstringlist.Create;
+      oldaithinkstep:=aithinkstep+'->';
+      For a:= 0 to templist.Count-1 do
+      begin
+//        Application.ProcessMessages;
+
+        aithinkstep:='';
+      // 走一步棋;//
+      //局面aboard 隨之改變
+        Aboard:=tempboard;
+      steplist.Add(templist[a]);
+        if SideIsRed Then
+         RedboardUpdate(Aboard,strToint(templist[a]))
+        else
+          BlackboardUpdate(aboard,strToint(templist[a]));
+        value:= -mutiMinMax(Aboard,Not SideIsRed,depth -2,aithinkstep);//);//搜索子節點，注意前面的負號
+        scorelist.add(inttostr(value));
+
+       end;
+       Scoresort(scorelist,steplist);
+       aithinksteplist:=Tstringlist.Create;
+//       for a := scorelist.Count div 2 to scorelist.Count do
+//          ProgressBar1.StepIt;// need modied
+       For a:=0 to  scorelist.count div 2 do //need modied
+       begin
+      // 走一步棋;//
+      //局面aboard 隨之改變
+        Aboard:=tempboard;
+        aithinkstep:='';
+            d:= strtoint(steplist[a]);
+          b:= d div 8 +1 ;
+          c:= d mod 8;
+          if c = 0 then
+            begin
+          b:=b-1;
+          c:=8;
+           end;
+         aithinkstep := aithinkstep+intTostr(c)+','+intTostr(b) ;
+
+        if SideIsRed Then
+         RedboardUpdate(Aboard,strToint(steplist[a]))
+        else
+          BlackboardUpdate(aboard,strToint(steplist[a]));
+
+        value:= -mutiMinMax(Aboard,Not SideIsRed,depth-1,aithinkstep);//);//搜索子節點，注意前面的負號
+
+    //    Aboard:=Tempboard;//撤銷剛才的一步;//恢復局面
+
+    // for display move value need modied;
+          d:= strtoint(steplist[a]);
+          b:= d div 8 +1 ;
+          c:= d mod 8;
+          if c = 0 then
+            begin
+          b:=b-1;
+          c:=8;
+           end;
+//          AiListBox.items.Add(intTostr(c)+','+intTostr(b)+' '+intTostr(value));
+          if value = bestvalue then
+            aithinksteplist.Add(aithinkstep)
+          else if value > bestvalue then
+          begin
+            aimovelist:=steplist[a]+' '+intTostr(value);
+            aithinksteplist.Clear;
+    // support random best move
+            aithinksteplist.Add(aithinkstep);
+    //        bestaithinkstep:=aithinkstep;
+
+    // end of display value
+    //    if sideIsRed then
+    //    begin
+    //      if value > bestvalue then
+    //      begin
+            bestvalue:=value;
+    //        if depth = Realdepth then
+    //        aimovelist.Add(templist[a]+' '+intTostr(value));
+           end;
+    //      end;
+        end;
+    {
+        else begin
+          if value < bestvalue then
+          begin
+            bestvalue:=value;
+            if depth = Realdepth then
+              aimovelist.Add(templist[a]+' '+intTostr(value));
+          end;
+        end;
+      end;
+      }
+      b:=Random(aithinksteplist.Count);
+      AiMovelist := inttostr(8*strtoint(copy(aithinksteplist[b],3,1))+strtoint(copy(aithinksteplist[b],1,1))-8) + ' '+inttostr(bestvalue);
+      aithinkstep := oldaithinkstep + aithinksteplist[b];
+      Result:= bestvalue;
+    //  aithinkstep:=bestaithinkstep;
+      scorelist.free;
+      steplist.free;
+      templist.Free;
+      aithinksteplist.free;
+    end;
+
+function TForm1.MutiMinMax(Aboard:Tboard;const SideIsRed:Boolean;const depth:integer;var aithinkstep:string):integer;
+var a,b,c,d,bestvalue, value:integer;templist:tstringlist;tempboard:Tboard;oldaithinkstep,bestaithinkstep:string;
+//var a,b,c,bestvalue, value:integer;templist:tstringlist;tempboard:Tboard;sameboard:boolean;
+begin
+//一般來說，這裡有一個判斷棋局是否結束的函數，
+//一旦棋局結束就不必繼續搜索了，直接返回極值。
+//但由於黑白棋不存在中途結束的情況，故省略。
+
+//  bestaithinkstep:=aithinkstep;
+  a:=0;
+  b:=0;
+  Score(Aboard,a,b);
+  if a = 0 then
+  begin
+    if SideIsRed then
+      result:= 2000
+    else
+      result:= -2000;
+    exit;
+  end;
+  if b = 0 then
+  begin
+    if SideIsRed then
+      result:= -2000
+    else
+      result:= 2000;
+    exit;
+  end;
+  if (depth<=0) or (a+b>63) or StopThink then //葉子節點
+  begin
+    result:= EvaluateScore(Aboard,SideIsRed);//直接返回對局面的估值
+    exit;
+  end;
+    templist := Tstringlist.Create;
+    bestvalue:=-INF;//初始最佳值設為負無窮
+  //生成走法
+//  templist:=tstringlist.Create;
+  if SideIsRed Then
+//    templist:=MakeRedMoveAI(Aboard)
+    MakeRedMove(Aboard,templist)
+  else
+//    templist:=MakeBlackMoveAI(Aboard);
+    MakeBlackMove(Aboard,templist);
+  if templist.Count = 0 then
+  begin
+    if SideIsRed Then
+      MakeBlackMove(Aboard,templist)
+    else
+      MakeRedMove(Aboard,templist);
+    if templist.Count = 0 then // both red and black no move
+    begin
+      templist.Free;
+      result:= EvaluateScore(Aboard,SideIsRed);//直接返回對局面的估值
+      exit;
+    end;
+    aithinkstep := aithinkstep +'->PASS';
+    result := -MutiMinMax(Aboard,Not SideIsRed,depth,aithinkstep);//);//搜索子節點，注意前面的負號
+    templist.Free;
+    exit;
+  end;
+  tempboard:=Aboard;
+  oldaithinkstep :=aithinkstep;
+  For a:= 0 to templist.Count-1 do
+  begin
+//    Application.ProcessMessages;
+    aithinkstep := oldaithinkstep;
+      d:= strtoint(templist[a]);
+      b:= d div 8 +1 ;
+      c:= d mod 8;
+      if c = 0 then
+       begin
+      b:=b-1;
+      c:=8;
+       end;
+    aithinkstep := aithinkstep+'->'+intTostr(c)+','+intTostr(b);
+  // 走一步棋;//
+  //局面aboard 隨之改變
+    Aboard:=tempboard;
+    if SideIsRed Then
+     RedboardUpdate(Aboard,strToint(templist[a]))
+    else
+      BlackboardUpdate(aboard,strToint(templist[a]));
+    value:= -MutiMinMax(Aboard,Not SideIsRed,depth-1,aithinkstep);//);//搜索子節點，注意前面的負號
+
+
+      if value > bestvalue then
+      begin
+        bestvalue:=value;
+        bestaithinkstep := aithinkstep;
+      end;
+    end;
+  templist.Free;
+  aithinkstep :=bestaithinkstep;
+  Result:= bestvalue;
+end;
 
 procedure TForm1.MakeRedMove(const aBoard:Tboard;var temp:TStringList);
 var b,c,d:integer;
@@ -897,18 +1431,20 @@ procedure TForm1.RedChessClick(Sender: TObject);
 // update chess
 var a,b,c:integer;templist:tstringlist;
 begin
-// clean move
-  Timage(Sender).Picture := Chess2.Picture;
-  Timage(Sender).OnClick := nil;
   // clean the t
   For a:= 0 to Redlist.Count-1 do
   begin
-    if TWinControl(FindComponent(Redlist[a])) <> TWinControl(Sender) then
-    begin
+//
+//    if TWinControl(FindComponent(Redlist[a])) <> TWinControl(Sender) then
+//    begin
       Timage(FindComponent(Redlist[a])).picture := nil;
       Timage(FindComponent(Redlist[a])).onclick := nil;
-    end;
+//    end;
   end;
+ // clean move
+  Timage(Sender).Picture := Chess2.Picture;
+  Timage(Sender).OnClick := nil;
+
   if notinback = true then
   begin
     c:=movedlist.Add('Red');
@@ -980,7 +1516,7 @@ begin
     end;
     a := Random(templist.Count);
     if HumanVsComputer.Checked = true then
-      BlackChessclick(Timage(FindComponent(templist[a])));
+      blackChessclick(Timage(FindComponent(templist[a])));
      templist.Free;
     exit;
   end;
@@ -1073,11 +1609,6 @@ begin
   templist.Free;
 end;
 
-procedure TForm1.RuleButtonClick(Sender: TObject);
-begin
-  Showmessage('Rule:The player who has more pieces on the board when the game is finished, loses the game');
-end;
-
 procedure TForm1.Score(const Aboard:Tboard;var RedScore,BlackScore:integer);
 var a,b:integer;
 begin
@@ -1135,6 +1666,65 @@ begin
   Blacklist.Free;
 //  AiMoveList.Free;
   Movedlist.Free;
+end;
+
+procedure TForm1.HumanFirstButtonClick(Sender: TObject);
+begin
+  HumanVsHumanButtonClick(nil);
+  HumanVsComputer.click;
+end;
+
+procedure TForm1.HumanVsHumanButtonClick(Sender: TObject);
+var a,b:integer;
+begin
+  HumanvsHuman.Checked :=True;
+  HumanVsComputer.Checked :=False;
+  ComputerVsHuman.Checked :=False;
+  redlist.Clear;
+  blacklist.Clear;
+  StepListBox.items.Clear;
+  RedNoMove:=False;
+  BlackNoMove:=false;
+  backbutton.Checked:=false;
+  for a:= 1 to 8 do
+    for b:= 1 to 8 do
+    begin
+      board[a][b]:=0;
+      Timage(FindComponent('image'+intTostr(8*a+b-8))).picture := nil;
+      Timage(FindComponent('image'+intTostr(8*a+b-8))).Onclick := nil;
+    end;
+
+  Image28.picture := RedChess.Picture;
+  Image29.picture := RedChess.Picture;
+  Image36.picture := RedChess.Picture;
+  Image37.picture := RedChess.Picture;
+  Image28.OnClick := RedChess.OnClick;
+  Image29.OnClick := RedChess.OnClick;
+  Image36.OnClick := RedChess.OnClick;
+  Image37.OnClick := RedChess.OnClick;
+
+  Redlist.Add('Image28');
+  Redlist.Add('Image29');
+  Redlist.Add('Image36');
+  Redlist.Add('Image37');
+  Label3.Caption:='0';
+  Label4.Caption:='0';
+  end;
+procedure TForm1.HumanvsHumanClick(Sender: TObject);
+begin
+  HumanVsComputer.checked :=False;
+  ComputerVsHuman.checked :=False;
+  HumanvsHuman.checked :=True;
+end;
+
+procedure TForm1.MenuItem1Click(Sender: TObject);
+begin
+
+end;
+
+procedure TForm1.RuleButtonClick(Sender: TObject);
+begin
+  Showmessage('Rule:The player who has more pieces on the board when the game is finished, loses the game');
 end;
 
 procedure TForm1.Startposition1ButtonClick(Sender: TObject);
@@ -1520,18 +2110,18 @@ procedure TForm1.BlackChessClick(Sender: TObject);
 // update chess
 var a,b,c:integer;templist:Tstringlist;
 begin
-// clean move
-  Timage(Sender).Picture := Chess1.Picture;
-  Timage(Sender).OnClick := nil;
   // clean the made move
   For a:= 0 to Blacklist.Count-1 do
   begin
-    if TWinControl(FindComponent(Blacklist[a])) <> TWinControl(Sender) then
-    begin
+//    if TWinControl(FindComponent(Blacklist[a])) <> TWinControl(Sender) then
+//    begin
       Timage(FindComponent(Blacklist[a])).picture := nil;
       Timage(FindComponent(Blacklist[a])).onclick := nil;
-    end;
+//    end;
   end;
+  // clean move
+    Timage(Sender).Picture := Chess1.Picture;
+    Timage(Sender).OnClick := nil;
   if notinback = true then
   begin
     c:=movedlist.Add('Black');
@@ -1661,8 +2251,8 @@ begin
         RedNoMove:=False;
         BlackNoMove:=False;
        Updateboard;
-      if HumanVsComputer.Checked = true then
-//    if (HumanVsComputer.Checked = true) and (FirstIsRed = false) or (HumanVsComputer.Checked = false) and (FirstIsRed = false) then
+
+    if (HumanVsComputer.Checked = true) and (FirstIsRed = true) or (HumanVsHuman.Checked = false) and (HumanVsComputer.Checked = false) and (FirstIsRed = true) then
         begin
           Application.ProcessMessages;
           Sleep(2000);
@@ -1696,10 +2286,11 @@ begin
   Form1.Close;
 end;
 
+
 procedure TForm1.SaveButtonClick(Sender: TObject);
 var a,b:integer;c:string;f:textfile;
 begin
-  SaveDialog1.Filter :='Reversi game files (*.txt)|*.TXT';
+  SaveDialog1.Filter :='Apple game files (*.txt)|*.TXT';
   if SaveDialog1.Execute then
   begin
     assignfile(f,SaveDialog1.FileName);
@@ -1796,15 +2387,8 @@ begin
 end;
 
 procedure TForm1.CopyToClipboardButtonClick(Sender: TObject);
-var a:integer;temp:TMemo;
 begin
-  temp:=TMemo.CreateParented(Form1.Handle);
-  temp.Lines.Add(BoardtoFen);
-  for a:= 0 to StepListBox.Items.Count-1 do
-    temp.Lines.Add(StepListBox.Items[a]);
-  temp.SelectAll;
-  temp.CopyToClipboard;
-  temp.Destroy;
+  Clipboard.AsText := StepListBox.Items.Text;
 end;
 
 procedure TForm1.ChessRadioGroupClick(Sender: TObject);
@@ -1846,16 +2430,12 @@ begin
   Timage(Sender).Tag := 1;
 end;
 
-procedure TForm1.CompuerFirstButtonClick(Sender: TObject);
-begin
-  HumanVsHumanButton.Click;
-//  ComputerVsHuman.Checked:=True;
-  ComputerVsHuman.Click;
-end;
-
 procedure TForm1.ComputerVsHumanClick(Sender: TObject);
 VAR b,c:integer;templist:Tstringlist;
 begin
+  HumanVsComputer.checked :=False;
+  ComputerVsHuman.checked :=True;
+  HumanvsHuman.checked :=False;
   if FirstIsRed then
   begin
     if StepListBox.Items.count = 0 then
@@ -1863,7 +2443,7 @@ begin
     if  (StepListBox.Items[StepListBox.count-1] = 'temp') or (copy(StepListBox.Items[StepListBox.Items.count - 1],1,5) = 'Black') then
     begin
       if StepListBox.Items[StepListBox.count-1] = 'temp' then
-         StepListBox.Clear;
+        StepListBox.Clear;
       RedNoMove:=False;
       BlackNoMove:=False;
       Score(Board,b,c);
@@ -1973,16 +2553,12 @@ end;
 
 
 
-procedure TForm1.HumanFirstButtonClick(Sender: TObject);
-begin
-
-  HumanVsHumanButton.Click;
-  HumanVsComputer.Checked :=True;
-end;
-
 procedure TForm1.HumanVsComputerClick(Sender: TObject);
 var b,c:integer;templist:Tstringlist;
 begin
+  HumanVsComputer.checked :=True;
+  ComputerVsHuman.checked :=False;
+  HumanvsHuman.checked :=False;
   if FirstIsRed then
   begin
     if  (StepListBox.Items.count = 0) Then exit;
@@ -2097,41 +2673,6 @@ begin
   end;
 
 end;
-procedure TForm1.HumanVsHumanButtonClick(Sender: TObject);
-var a,b:integer;
-begin
-  HumanvsHuman.Checked :=True;
-  redlist.Clear;
-  blacklist.Clear;
-  StepListBox.items.Clear;
-  RedNoMove:=False;
-  BlackNoMove:=false;
-  backbutton.Checked:=false;
-  for a:= 1 to 8 do
-    for b:= 1 to 8 do
-    begin
-      board[a][b]:=0;
-      Timage(FindComponent('image'+intTostr(8*a+b-8))).picture := nil;
-      Timage(FindComponent('image'+intTostr(8*a+b-8))).Onclick := nil;
-    end;
-
-  Image28.picture := RedChess.Picture;
-  Image29.picture := RedChess.Picture;
-  Image36.picture := RedChess.Picture;
-  Image37.picture := RedChess.Picture;
-  Image28.OnClick := RedChess.OnClick;
-  Image29.OnClick := RedChess.OnClick;
-  Image36.OnClick := RedChess.OnClick;
-  Image37.OnClick := RedChess.OnClick;
-
-  Redlist.Add('Image28');
-  Redlist.Add('Image29');
-  Redlist.Add('Image36');
-  Redlist.Add('Image37');
-  Label3.Caption:='0';
-  Label4.Caption:='0';
-  end;
-
 procedure TForm1.Chess1Click(Sender: TObject);
 begin
   Timage(Sender).picture := chess1.Picture;
@@ -2364,7 +2905,7 @@ begin
 //    try
     Reset(f);
     readln(f,a);
-    if a<>'Anti Reversi 8x8' then
+    if a <>'Anti Reversi 8x8' then
     begin
       closefile(f);
       ShowMessage('Wrong file');
@@ -2402,6 +2943,8 @@ begin
     redlist.Clear;
     blacklist.Clear;
     HumanvsHuman.Checked:=true;
+    ComputerVsHuman.Checked:=False;
+    HumanVsComputer.Checked:=False;
     templist:= Tstringlist.Create;
     for b:= 0 to StepListBox.Items.count - 1 do
     begin
@@ -2513,11 +3056,10 @@ end;
 procedure TForm1.BackButtonClick(Sender: TObject);
 var a,b,c:integer;templist:Tstringlist;
 begin
-
-
  templist:= Tstringlist.Create;
   While true do
   begin
+//    d:=True;
     a:= movedlist.count-1;
 
    if (copy(movedlist[a],1,7) = 'Redpass') and (copy(movedlist[a-1],1,9) <> 'Blackpass') then
@@ -2528,6 +3070,7 @@ begin
    if (copy(movedlist[a],1,7) <> 'Redpass') and (copy(movedlist[a],1,9) <> 'Blackpass') and (copy(movedlist[a-2],1,7) <> 'Redpass') and (copy(movedlist[a-2],1,9) <> 'Blackpass') Then
      break;
     movedlist.Delete(movedlist.Count-1);
+//    movedlist.Delete(movedlist.Count-1);
 //    StepListBox.items.Delete(StepListBox.count-1);
     StepListBox.items.Delete(StepListBox.count-1);
   end;
@@ -2537,8 +3080,14 @@ begin
     movedlist.Delete(movedlist.Count-1);
     StepListBox.items.Delete(StepListBox.count-1);
   end;
-
-  StepListBox.items.Delete(StepListBox.count-1);
+  if (StepListBox.items[StepListBox.count-1] = 'Red pass') or (StepListBox.items[StepListBox.count-3] = 'Black pass') then
+  begin
+   StepListBox.items.Delete(StepListBox.count-1);
+   StepListBox.items.Delete(StepListBox.count-1);
+   movedlist.Delete(movedlist.Count-1);
+   movedlist.Delete(movedlist.Count-1);
+  end;
+   StepListBox.items.Delete(StepListBox.count-1);
   redlist.Clear;
   blacklist.clear;
   if movedlist.Count > 0 Then
@@ -2685,8 +3234,7 @@ begin
       b:=b-1;
       c:=8;
        end;
-
-      AiListBox.items.Add(intTostr(c)+','+intTostr(b)+' '+intTostr(value));
+      AiListBox.items.Add(intTostr(value)+':'+aithinkstep);
       if value = bestvalue then
         aithinksteplist.Add(aithinkstep)
       else if value > bestvalue then
@@ -2800,23 +3348,6 @@ begin
 
     if depth = Realdepth-1 then
       ProgressBar1.StepIt;
-     {
-    if depth = Realdepth then
-    begin
-      d:= strtoint(templist[a]);
-      b:= d div 8 +1 ;
-      c:= d mod 8;
-      if c = 0 then
-       begin
-      b:=b-1;
-      c:=8;
-       end;
-
-      AiListBox.items.Add(intTostr(c)+','+intTostr(b)+' '+intTostr(value));
-      if value > bestvalue then
-        aimovelist:=templist[a]+' '+intTostr(value);
-    end;
-    }
       if value > bestvalue then
       begin
         bestvalue:=value;
@@ -2828,21 +3359,18 @@ begin
   Result:= bestvalue;
 end;
 
-procedure TForm1.AboutButtonClick(Sender: TObject);
-begin
-  ShowMessage('Copyright 2011,2012 by Wu Hon Sum'+#13+
-'This program is free software: you can redistribute it and/or modify'+#13+
-'it under the terms of the GNU General Public License as published by'+#13+
-'the Free Software Foundation, either version 3 of the License, or'+#13+
-'any later version.');
-end;
-
 function TForm1.AI(Aboard:Tboard;ComputerIsRed:Boolean):string;
 var a,b,c:integer;thinkstep:string;
 begin
   AiListBox.Clear;
   thinkstep:='';
   Application.ProcessMessages;
+  Score(board,a,b);
+  if (a+b < 64) and (System.CPUCount > 1) then
+  begin
+    Result:=muti(ComputerIsRed);
+    exit;
+  end;
   StopThinkButton.Enabled:=True;
 // http://blog.csdn.net/nowcan/archive/2004/10/19/142994.aspx
 // 其實所有戰術都是減低對方行動力,最後逼對方行死位.
@@ -2857,9 +3385,6 @@ begin
   //aimovelist only output next move and score
   score(Aboard,a,b);
   Realdepth:= strToint(Endgamedepth.text);
-//  if a+b + Realdepth then
-//    Realdepth:= strToint(Nornaldepth.Text);
-
   if a+b + Realdepth > 64 then
     Realdepth:= 64-a-b
   else
@@ -2877,11 +3402,6 @@ begin
     c:= blacklist.Count;
   end;
 
-//  if ComputerIsRed then
-//    c:= redlist.Count
-//  else
-//    c:= blacklist.Count;
-    // temp disable
      if (a + b < 46) and  (c > 4) and (Realdepth > 5) then
    a:=minMaxStart(Aboard,ComputerIsRed,Realdepth,thinkstep)
  else
@@ -2895,29 +3415,10 @@ begin
   blacklist.Clear;
   ThinkstepEdit.text:=thinkstep;
   AIDisplayScoreLabel.caption:=intTostr(A);
-  {
-  for d:=0 to aimovelist.count-1 do
-  begin
-    a:=strToint(copy(aimovelist[d],1,2));
-    b:= a div 8 +1 ;
-    c:= a mod 8;
-    if c = 0 then
-    begin
-      b:=b-1;
-      c:=8;
-    end;
-    AiListBox.Items.Add(intTostr(c)+','+intTostr(b)+' '+copy(aimovelist[d],3,length(aimovelist[d])-2));
-  end;
-  }
+
 
   a:=strtoint(trim(copy(aimovelist,1,2)));
-//  d:=copy(aimovelist[aimovelist.count-1],3,length(aimovelist[aimovelist.count-1])-2);
-//  b := a div 8 + 1;      //4*8+3
-//  c := a mod 8;
-//  a:= 8*(c-1)+b;
-
-//  Result:='image'+trim(copy(aimovelist[aimovelist.count-1],1,2));
-  Result:='image'+ inttostr(a) ;// d;
+  Result:='image'+ inttostr(a) ;
   StopThinkButton.Enabled:=False;
   StopThink:=False;
 end;
@@ -3029,10 +3530,7 @@ begin
      RedboardUpdate(Aboard,strToint(templist[a]))
     else
       BlackboardUpdate(aboard,strToint(templist[a]));
-    if depth = 6 then
-      value:= -MinMax(Aboard,Not SideIsRed,4,aithinkstep)//);//搜索子節點，注意前面的負號
-    else
-      value:= -MinMax(Aboard,Not SideIsRed,depth-3,aithinkstep);//);//搜索子節點，注意前面的負號
+    value:= -MinMax(Aboard,Not SideIsRed,depth -2,aithinkstep);//);//搜索子節點，注意前面的負號
     scorelist.add(inttostr(value));
 
    end;
@@ -3224,7 +3722,7 @@ procedure TForm1.TojavaboardbuttonClick(Sender: TObject);
 var F:Textfile;s,t,u:string;a:integer;
 begin
   SaveDialog1.FileName := '*.htm';
-  SaveDialog1.Filter := 'Reversi game Java File(*.htm)|*.HTM';
+  SaveDialog1.Filter := 'Apple game Java (*.htm)|*.HTM';
 
   if SaveDialog1.Execute then
   begin
@@ -3232,7 +3730,7 @@ begin
     Rewrite(f);
     Writeln(f,'<HTML>');
     Writeln(f,'<Center>');
-    Writeln(f,'<APPLET width="284" height="331" codebase="http://home.i-cable.com/wu/java/" code="JavaReversi8x8">');
+    Writeln(f,'<APPLET width="284" height="331" codebase="http://home.i-cable.com/wu/java/" code="JavaReversi">');
     Writeln(f,'<PARAM name="Position" value="'+boardtofen+'">');
     If FirstIsRed then
       Writeln(f,'<PARAM name="MoveFirst" value="Red">')
@@ -3274,6 +3772,8 @@ end;
 function Tform1.EvaluateScore(const Aboard:Tboard;const SideIsRed:Boolean):Integer;
 var a,b:integer;
 begin
+  a:=0;
+  b:=0;
   Score(Aboard,a,b);
   if a+b < 59 then begin
     if aboard[1][1] = 0 then
@@ -3313,7 +3813,6 @@ begin
     Result := a-b;
  end;
 end;
-
 
 
 end.
