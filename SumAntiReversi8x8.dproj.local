@@ -1,11 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
 	<Transactions>
-    <Transaction>2012/01/28 16:46:45.888.pas,E:\delphi\Anti Reversi\0.6c\aiThread.pas=</Transaction>
-    <Transaction>2012/01/29 07:12:52.477.dproj,E:\delphi\Anti Reversi\0.6c\Project1.dproj=E:\delphi\Anti Reversi\0.6c\SumAntiReversi8x8.dproj</Transaction>
-    <Transaction>2012/01/29 07:12:52.515.txapackage,e:\delphi\anti reversi\0.6c\modelsupport_project1\default.txapackage=</Transaction>
-    <Transaction>2012/01/29 07:12:52.528.txapackage,e:\delphi\anti reversi\0.6c\modelsupport_project1\unit1\default.txapackage=</Transaction>
-    <Transaction>2012/01/29 07:12:52.535.txapackage,e:\delphi\anti reversi\0.6c\modelsupport_project1\project1\default.txapackage=</Transaction>
-    <Transaction>2012/01/29 07:12:52.541.txvpck,e:\delphi\anti reversi\0.6c\modelsupport_project1\project1\default.txvpck=</Transaction>
+    <Transaction>2022/01/09 02:33:33.000.206,=C:\delphi\Unit1.pas</Transaction>
+    <Transaction>2023/01/28 19:53:41.000.927,=C:\delphi\Unit1.pas</Transaction>
+    <Transaction>2023/01/28 19:54:54.000.209,=C:\delphi\Unit1.pas</Transaction>
+    <Transaction>2023/01/28 20:07:26.000.975,=C:\delphi\Unit1.pas</Transaction>
+    <Transaction>2023/01/28 20:07:58.390,=C:\delphi\Unit1.pas</Transaction>
+    <Transaction>2023/01/28 20:08:22.474,E:\Delphi\test_\sum-gnu-anti-Reversi-delphi-windows\Unit1.dfm=C:\delphi\Unit1.dfm</Transaction>
+    <Transaction>2023/01/28 20:08:22.474,E:\Delphi\test_\sum-gnu-anti-Reversi-delphi-windows\Unit1.pas=C:\delphi\Unit1.pas</Transaction>
+    <Transaction>2023/01/28 20:08:42.676,E:\Delphi\test_\sum-gnu-anti-Reversi-delphi-windows\SumAntiReversi8x8.dproj=C:\delphi\Project1.dproj</Transaction>
   </Transactions>
 </BorlandProject>
