@@ -22,7 +22,7 @@ interface
 
 uses
   SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls, Menus,ComCtrls,ClipBrd,System.SyncObjs;
+  Dialogs, ExtCtrls, StdCtrls, Menus,ComCtrls,ClipBrd,System.SyncObjs,System.Threading;
 
 const
   inf = 10000;
@@ -45,7 +45,6 @@ type
     Chess1: TImage;
     HumanFirstButton: TMenuItem;
     HumanVsHumanButton: TMenuItem;
-    ComputerFirstButton: TMenuItem;
     AboutButton: TMenuItem;
     RuleButton: TMenuItem;
     RedChess: TImage;
@@ -167,7 +166,6 @@ type
     procedure HumanFirstButtonClick(Sender: TObject);
     procedure HumanVsHumanButtonClick(Sender: TObject);
     procedure HumanvsHumanClick(Sender: TObject);
-    procedure MenuItem1Click(Sender: TObject);
     procedure RuleButtonClick(Sender: TObject);
     procedure RedChessClick(Sender: TObject);
     procedure BlackChessClick(Sender: TObject);
@@ -219,7 +217,7 @@ type
       AiMovelist:string;
       movedlist:TStringList;
       function Muti(const ComputerisRed:Boolean):string;
-      procedure DoSomethingParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+//need delete      procedure DoSomethingParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
       procedure MakeRedMove(const ABoard:Tboard;var temp:TStringList);
       procedure MakeBlackMove(const ABoard:Tboard;var temp:TStringList);
  //     function MakeRedMoveAI(const ABoard:Tboard):TStringList;
@@ -317,7 +315,7 @@ var
  }
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 
 
@@ -423,7 +421,73 @@ begin
      mutitemplist.Add(inttostr(a)+' '+templist[a]+' p');
 end;
 mutidepth:= depth;
-ProcThreadPool.DoParallel(DoSomethingParallel,0,mutitemplist.count-1,nil);// address, startindex, endindex, optional data,max thread
+//ProcThreadPool.DoParallel(DoSomethingParallel,0,mutitemplist.count-1,nil);// address, startindex, endindex, optional data,max thread
+TParallel.For(0,  mutitemplist.count-1, procedure(index:Integer)
+var Aboard:Tboard;a,B,C,D,mutitscore:integer;stepno,tempstring,tempstring2,tempstring3,aithinkstep:string;SideisRed:Boolean;
+begin
+   MyCriticalSection.Enter;
+   tempstring := mutitemplist[index];
+   MyCriticalSection.Release;
+     For a := 2 to length(tempstring) do
+    if tempstring[a] = ' ' then break;
+  stepno := copy(tempstring,1,a-1);
+  tempstring :=  copy(tempstring,a+1,length(mutitemplist[index])-a);
+  For a := 2 to length(tempstring) do
+    if tempstring[a] = ' ' then break;
+  tempstring2 := copy(tempstring,1,a-1);
+  tempstring := copy(tempstring,a+1,2);
+  d:= strtoint(tempstring2);
+  b:= d div 8 +1 ;
+  c:= d mod 8;
+  if c = 0 then
+  begin
+    Dec(b);
+    c:=8;
+  end;
+  aithinkstep := inttostr(c)+','+inttostr(b);
+  Aboard:= board;
+  if tempstring[1] <> 'p' then
+  begin
+    d:= strtoint(tempstring);
+    b:= d div 8 +1 ;
+    c:= d mod 8;
+    if c = 0 then
+    begin
+      Dec(b);
+      c:=8;
+    end;
+    aithinkstep := aithinkstep+'->'+inttostr(c)+','+inttostr(b);
+    if mutisideisRed = True then
+    begin
+      RedboardUpdate(Aboard,strtoint(tempstring2));
+      Blackboardupdate(Aboard,strtoint(tempstring));
+    end
+    else begin
+      Blackboardupdate(Aboard,strtoint(tempstring2));
+      RedboardUpdate(Aboard,strtoint(tempstring));
+    end;
+    if  mutidepth > 5 then
+      mutitscore := -MutiMinMaxStart(Aboard,mutiSideIsRed,mutidepth,aithinkstep)
+    else
+      mutitscore := -MutiMinMax(Aboard,mutiSideIsRed,mutidepth,aithinkstep);
+  end
+  else begin
+     aithinkstep := aithinkstep + '->PASS';
+     if mutisideisRed = True then
+       RedboardUpdate(Aboard,strtoint(tempstring2))
+     Else
+       Blackboardupdate(Aboard,strtoint(tempstring2));
+     mutitscore := -MutiMinMax(Aboard,mutiSideIsRed,mutidepth+1,aithinkstep);
+  end;
+  a := strtoint(stepno);
+  MyCriticalSection.Acquire;
+  if mutitscore > strtoint(mutiscorelist[a]) then
+  begin
+    mutiscorelist[a] := inttostr(mutitscore);
+    mutisteplist[a] := aithinkstep;
+  end;
+  MyCriticalSection.Leave;
+end);
 for a:= 0 to mutiscorelist.count-1 do
    mutiscorelist[a] := inttostr(-strtoint(mutiscorelist[a]));
 scoresort(mutiscorelist,mutisteplist);
@@ -505,32 +569,7 @@ begin
 //  mutisteplist.free;
 end;
 
-
-
-procedure TForm1.AboutButtonClick(Sender: TObject);
-begin
- ShowMessage('Copyright 2011,2012 by Wu Hon Sum'+#13+
-'This program is free software: you can redistribute it and/or modify'+#13+
-'it under the terms of the GNU General Public License as published by'+#13+
-'the Free Software Foundation, either version 3 of the License, or'+#13+
-'any later version.');
-end;
-
-procedure TForm1.ComputerFirstButtonClick(Sender: TObject);
-begin
-  HumanVsHumanButton.Click;
-  ComputerVsHuman.Click;
-end;
-
-procedure TForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
-begin
- mutitemplist.free;
- mutisteplist.free;
- mutiscorelist.free;
-  MyCriticalSection.Free;
-
-end;
-
+ {
 procedure TForm1.DoSomethingParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
 var Aboard:Tboard;a,B,C,D,mutitscore:integer;stepno,tempstring,tempstring2,tempstring3,aithinkstep:string;SideisRed:Boolean;
 begin
@@ -596,48 +635,34 @@ begin
     mutisteplist[a] := aithinkstep;
   end;
   MyCriticalSection.Release;
-{
- AAboard:=Aboard;
-  d:= strtoint(mutitemplist[index]);
-  b:= d div 8 +1 ;
-  c:= d mod 8;
-  if c = 0 then
-   begin
-  b:=b-1;
-  c:=8;
-  end;
-  oldaithinkstep := inttostr(c)+','+inttostr(b);
-  For a:= 0 to Templist.Count-1 do
-  begin
-    Aboard:=AAboard;
-    d:= strtoint(Templist[a]);
-    b:= d div 8 +1 ;
-    c:= d mod 8;
-    if c = 0 then
-    begin
-       b:=b-1;
-       c:=8;
-    end;
-    aithinkstep :=oldaithinkstep + '->'+ inttostr(c)+','+inttostr(b);
-    if mutisideisRed = True then
-      BlackboardUpdate(Aboard,strToint(Templist[a]))
-    else
-      RedboardUpdate(Aboard,strToint(Templist[a]));
-    mutitscore := -MutiMinMax(Aboard,mutiSideIsRed,mutidepth-2,aithinkstep);
-    if mutitscore > bestscore then
-    begin
-      bestscore := mutitscore;
-      bestaithinkstep := aithinkstep;
-    end;
-  end;
-  Templist.free;
 
-  system.EnterCriticalsection(MyCriticalSection);
-  mutiscorelist.Add(inttostr(-bestscore));
-  mutisteplist.Add(bestaithinkstep);
-  system.LeaveCriticalsection(MyCriticalSection);
-}
 end;
+}
+procedure TForm1.AboutButtonClick(Sender: TObject);
+begin
+ ShowMessage('Copyright 2011,2012 by Wu Hon Sum'+#13+
+'This program is free software: you can redistribute it and/or modify'+#13+
+'it under the terms of the GNU General Public License as published by'+#13+
+'the Free Software Foundation, either version 3 of the License, or'+#13+
+'any later version.');
+end;
+
+procedure TForm1.ComputerFirstButtonClick(Sender: TObject);
+begin
+  HumanVsHumanButton.Click;
+  ComputerVsHuman.Click;
+end;
+
+procedure TForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+begin
+ mutitemplist.free;
+ mutisteplist.free;
+ mutiscorelist.free;
+  MyCriticalSection.Free;
+
+end;
+
+
 
 function TForm1.MutiMinMaxStart(Aboard:Tboard;SideIsRed:Boolean;depth:integer;var aithinkstep:string):integer;
 var a,b,c,d,bestvalue, value:integer;templist:tstringlist;tempboard:Tboard;scorelist,steplist:Tstringlist;aithinksteplist:Tstringlist;oldaithinkstep:string;//bestaithinkstep:string;
@@ -1715,11 +1740,6 @@ begin
   HumanVsComputer.checked :=False;
   ComputerVsHuman.checked :=False;
   HumanvsHuman.checked :=True;
-end;
-
-procedure TForm1.MenuItem1Click(Sender: TObject);
-begin
-
 end;
 
 procedure TForm1.RuleButtonClick(Sender: TObject);
